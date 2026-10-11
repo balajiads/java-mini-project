@@ -1,0 +1,316 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atmos - Weather Dashboard</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 30px 18px;
+      min-height: 100vh;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #f8fafc;
+      background: linear-gradient(135deg, #071426, #10294b, #111827);
+    }
+
+    .container { max-width: 1000px; margin: auto; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+    }
+
+    .logo { font-size: 28px; font-weight: 800; }
+    .logo span { color: #60a5fa; }
+    .subtitle { color: #a8bad3; margin-top: 5px; }
+
+    .search {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    input {
+      flex: 1;
+      min-width: 0;
+      padding: 14px;
+      color: white;
+      background: #172943;
+      border: 1px solid #30435f;
+      border-radius: 10px;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 14px 20px;
+      background: #60a5fa;
+      color: #071426;
+      border: none;
+      border-radius: 10px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .card {
+      background: rgba(23, 41, 67, 0.92);
+      border: 1px solid #30435f;
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .current {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .city { color: #b8c9df; font-size: 18px; }
+    .temperature { font-size: 68px; font-weight: bold; margin: 12px 0; }
+    .description { font-size: 18px; text-transform: capitalize; }
+    .muted { color: #a8bad3; }
+
+    .details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .detail {
+      padding: 16px;
+      background: #203652;
+      border-radius: 12px;
+    }
+
+    .detail strong {
+      display: block;
+      font-size: 22px;
+      margin-top: 10px;
+    }
+
+    h2 { font-size: 20px; margin-top: 0; }
+
+    .forecast {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .day {
+      background: #203652;
+      border-radius: 12px;
+      padding: 16px 8px;
+      text-align: center;
+    }
+
+    .day strong { display: block; margin-bottom: 12px; }
+    .day .high { font-size: 20px; margin: 10px 0; }
+    .day .rain { color: #7dd3fc; font-size: 13px; margin-top: 10px; }
+
+    #status { color: #bfdbfe; margin: 14px 0; }
+    .hidden { display: none; }
+
+    @media (max-width: 650px) {
+      .current { grid-template-columns: 1fr; }
+      .forecast { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      header { align-items: flex-start; gap: 10px; flex-direction: column; }
+      .temperature { font-size: 56px; }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="container">
+    <header>
+      <div>
+        <div class="logo">ATMOS<span>.</span></div>
+        <div class="subtitle">Your personal weather dashboard</div>
+      </div>
+      <div class="muted">Live Weather</div>
+    </header>
+
+    <form class="search" id="searchForm">
+      <input id="cityInput" value="Chennai" placeholder="Enter city name">
+      <button type="submit">Search</button>
+    </form>
+
+    <p id="status">Loading weather...</p>
+
+    <section id="dashboard" class="hidden">
+      <div class="card current">
+        <div>
+          <div class="city" id="cityName">Chennai</div>
+          <div class="temperature" id="temperature">--°C</div>
+          <div class="description" id="description">Loading...</div>
+          <p class="muted" id="feelsLike"></p>
+        </div>
+
+        <div class="details">
+          <div class="detail">
+            💧 Humidity
+            <strong id="humidity">--%</strong>
+          </div>
+          <div class="detail">
+            💨 Wind speed
+            <strong id="wind">--</strong>
+          </div>
+          <div class="detail">
+            🌧️ Rain chance
+            <strong id="rain">--</strong>
+          </div>
+          <div class="detail">
+            🌡️ Pressure
+            <strong id="pressure">--</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>5-Day Forecast</h2>
+        <div id="forecast" class="forecast"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const statusBox = document.getElementById("status");
+    const dashboard = document.getElementById("dashboard");
+
+    document.getElementById("searchForm").addEventListener("submit", event => {
+      event.preventDefault();
+      loadWeather();
+    });
+
+    async function loadWeather() {
+      const city = document.getElementById("cityInput").value.trim();
+
+      if (!city) {
+        statusBox.textContent = "Please enter a city name.";
+        return;
+      }
+
+      dashboard.classList.add("hidden");
+      statusBox.textContent = "Fetching weather...";
+
+      try {
+        const response = await fetch(
+          "/api/weather?city=" + encodeURIComponent(city)
+        );
+        const data = await response.json();
+
+        if (!response.ok || data.error) {
+          throw new Error(data.error || "Could not load weather.");
+        }
+
+        const current = data.current;
+        const forecast = data.forecast;
+
+        // Support the standard OpenWeatherMap current-weather response.
+        document.getElementById("cityName").textContent =
+          current.name || city;
+
+        document.getElementById("temperature").textContent =
+          Math.round(current.main.temp) + "°C";
+
+        document.getElementById("description").textContent =
+          current.weather?.[0]?.description || "Weather unavailable";
+
+        document.getElementById("feelsLike").textContent =
+          "Feels like " + Math.round(current.main.feels_like) + "°C";
+
+        document.getElementById("humidity").textContent =
+          current.main.humidity + "%";
+
+        document.getElementById("wind").textContent =
+          (current.wind?.speed ?? "--") + " m/s";
+
+        document.getElementById("pressure").textContent =
+          (current.main.pressure ?? "--") + " hPa";
+
+        const entries = forecast.list || [];
+        const daily = {};
+
+        // Group 3-hour forecast entries into days.
+        entries.forEach(item => {
+          const date = item.dt_txt
+            ? item.dt_txt.split(" ")[0]
+            : new Date(item.dt * 1000).toISOString().split("T")[0];
+
+          if (!daily[date]) daily[date] = [];
+          daily[date].push(item);
+        });
+
+        const days = Object.entries(daily).slice(0, 5);
+        const forecastBox = document.getElementById("forecast");
+        forecastBox.replaceChildren();
+
+        days.forEach(([date, readings]) => {
+          const temps = readings.map(item => item.main.temp);
+          const high = Math.round(Math.max(...temps));
+          const low = Math.round(Math.min(...temps));
+          const noon = readings.find(item =>
+            item.dt_txt?.includes("12:00:00")
+          ) || readings[Math.floor(readings.length / 2)];
+
+          const chance = noon.pop == null
+            ? null
+            : Math.round(noon.pop * 100);
+
+          const card = document.createElement("div");
+          card.className = "day";
+
+          const dayName = new Date(date + "T12:00:00")
+            .toLocaleDateString(undefined, { weekday: "short" });
+
+          const description =
+            noon.weather?.[0]?.description || "Forecast";
+
+          card.innerHTML = `
+            <strong>${dayName}</strong>
+            <div>${description}</div>
+            <div class="high">${high}°</div>
+            <div class="muted">${low}° low</div>
+            <div class="rain">🌧️ ${chance == null ? "N/A" : chance + "%"} rain</div>
+          `;
+
+          forecastBox.appendChild(card);
+        });
+
+        // Use the maximum forecast probability as today's indicative chance.
+        const today = entries.filter(item => {
+          const date = item.dt_txt
+            ? item.dt_txt.split(" ")[0]
+            : new Date(item.dt * 1000).toISOString().split("T")[0];
+
+          return date === new Date().toLocaleDateString("en-CA");
+        });
+
+        const probabilities = today
+          .map(item => item.pop)
+          .filter(value => typeof value === "number");
+
+        document.getElementById("rain").textContent =
+          probabilities.length
+            ? Math.round(Math.max(...probabilities) * 100) + "%"
+            : "N/A";
+
+        dashboard.classList.remove("hidden");
+        statusBox.textContent = "Weather loaded successfully.";
+      } catch (error) {
+        statusBox.textContent =
+          "Could not load weather. Check the Java server, API key and city name.";
+        console.error(error);
+      }
+    }
+
+    loadWeather();
+  </script>
+</body>
+</html>
